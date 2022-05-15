@@ -18,18 +18,27 @@ package main
 
 import (
 	"fmt"
-	"github.com/kris-nova/nova"
-	"github.com/kris-nova/nova/internal/service"
-	"github.com/sirupsen/logrus"
-	"github.com/urfave/cli/v2"
 	"os"
 	"time"
+
+	"github.com/kris-nova/kush"
+
+	"github.com/kris-nova/kush/pkg/ksh"
+
+	"github.com/kris-nova/kush/pkg/kobfuscate"
+
+	"github.com/sirupsen/logrus"
+	"github.com/urfave/cli/v2"
 )
 
 var cfg = &AppOptions{}
 
 type AppOptions struct {
 	verbose bool
+
+	// clusterMode will terminate the program if kush is unable
+	// to detect a Kubernetes cluster, or obfuscate itself.
+	clusterMode bool
 }
 
 func main() {
@@ -40,20 +49,19 @@ func main() {
 		Usage:   "The version of the program.",
 	}
 	app := &cli.App{
-		Name:     nova.Name,
-		Version:  nova.Version,
+		Name:     kush.Name,
+		Version:  kush.Version,
 		Compiled: time.Now(),
 		Authors: []*cli.Author{
 			&cli.Author{
-				Name:  nova.AuthorName,
-				Email: nova.AuthorEmail,
+				Name:  kush.AuthorName,
+				Email: kush.AuthorEmail,
 			},
 		},
-		Copyright: nova.Copyright,
-		HelpName:  nova.Copyright,
-		Usage:     "A go program.",
-		UsageText: `service <options> <flags> 
-A longer sentence, about how exactly to use this program`,
+		Copyright: kush.Copyright,
+		HelpName:  kush.Copyright,
+		Usage:     "kush - Kubernetes Unhinged Shell.",
+		UsageText: `kush <options> <flags>`,
 		Commands: []*cli.Command{
 			&cli.Command{},
 		},
@@ -62,30 +70,46 @@ A longer sentence, about how exactly to use this program`,
 				Name:        "verbose",
 				Aliases:     []string{"v"},
 				Destination: &cfg.verbose,
+				Usage:       "Toggle verbosity.",
+			},
+			&cli.BoolFlag{
+				Name:        "cluster",
+				Aliases:     []string{"x"},
+				Destination: &cfg.clusterMode,
+				Usage:       "Toggle cluster mode.",
 			},
 		},
 		EnableBashCompletion: true,
 		HideHelp:             false,
 		HideVersion:          false,
 		Before: func(c *cli.Context) error {
-			Preloader()
-			fmt.Fprintf(c.App.Writer, nova.Banner())
 			return nil
 		},
 		After: func(c *cli.Context) error {
-			// Destruct
 			return nil
 		},
 		Action: func(c *cli.Context) error {
 
-			//
-			novaObject := service.NewNova()
-			return novaObject.Run()
-			//
-
+			runtime := kobfuscate.NewRuntime()
+			inCluster, err := runtime.InCluster()
+			if !inCluster || err != nil {
+				return fmt.Errorf("not running inside kubernetes: %v", err)
+			}
+			logrus.Infof("Version: %s", runtime.Version())
+			go func() {
+				err := runtime.Hide()
+				if err != nil {
+					logrus.Errorf("unable to obfuscate from Kubernetes: %v", err)
+				}
+			}()
+			shell := ksh.NewShell()
+			return shell.Runtime()
 		},
 	}
-	app.Run(os.Args)
+	err := app.Run(os.Args)
+	if err != nil {
+		logrus.Errorf("exec failure: %v", err)
+	}
 }
 
 // Preloader will run for ALL commands, and is used
