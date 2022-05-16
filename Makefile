@@ -27,7 +27,7 @@ copyright   =  Copyright (c) $(year)
 
 compile: ## Compile for the local architecture ⚙
 	@echo "Compiling..."
-	go build -ldflags "\
+	go build -a -installsuffix cgo -ldflags "\
 	-X 'github.com/$(org)/$(target).Version=$(version)' \
 	-X 'github.com/$(org)/$(target).AuthorName=$(authorname)' \
 	-X 'github.com/$(org)/$(target).AuthorEmail=$(authoremail)' \
