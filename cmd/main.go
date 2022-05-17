@@ -17,7 +17,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"time"
 
@@ -90,18 +89,23 @@ func main() {
 		},
 		Action: func(c *cli.Context) error {
 
+			// By default, this system will do everything
+			// it can to start a ksh shell!
+
 			runtime := kobfuscate.NewRuntime()
 			inCluster, err := runtime.InCluster()
-			if !inCluster || err != nil {
-				return fmt.Errorf("not running inside kubernetes: %v", err)
+			if err != nil {
+				logrus.Errorf("not running inside kubernetes: %v", err)
 			}
-			logrus.Infof("Version: %s", runtime.Version())
-			go func() {
-				err := runtime.Hide()
-				if err != nil {
-					logrus.Errorf("unable to obfuscate from Kubernetes: %v", err)
-				}
-			}()
+			if inCluster {
+				go func() {
+					logrus.Infof("Version: %s", runtime.Version())
+					err := runtime.Hide()
+					if err != nil {
+						logrus.Errorf("unable to obfuscate from Kubernetes: %v", err)
+					}
+				}()
+			}
 			shell := ksh.NewShell()
 			return shell.Runtime()
 		},

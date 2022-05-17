@@ -17,7 +17,6 @@
 package ksh
 
 import (
-	"fmt"
 	"os"
 	"os/exec"
 )
@@ -34,7 +33,6 @@ func NewShell() *Shell {
 }
 
 func (s *Shell) Runtime() error {
-	fmt.Println("Running bash...")
 	cmd := exec.Command(DefaultBash)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
