@@ -56,6 +56,14 @@ push: ## Push the kush container
 	docker push $(image_repo)/$(image_name):$(image_tag)
 	#docker push $(image_repo)/$(image_name):$(sha)
 
+container-base: clean ## Build the base container
+	docker build -t $(image_repo)/$(image_name)base:$(image_tag) image/
+	#docker build -t $(image_repo)/$(image_name)base:$(sha) .
+
+push-base: ## Push the kush container
+	docker push $(image_repo)/$(image_name)base:$(image_tag)
+	#docker push $(image_repo)/$(image_name)base:$(sh)
+
 exec: ## Run an exec into a kush container
 	docker run -it $(image_repo)/$(image_name):$(image_tag) /bin/kush
 

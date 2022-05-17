@@ -83,12 +83,14 @@ func main() {
 			} else {
 				logrus.SetLevel(logrus.WarnLevel)
 			}
+			logrus.Infof("Starting kobfuscate...")
 
 			// By default, this system will do everything
 			// it can to start a ksh shell!
 
 			runtime := kobfuscate.NewRuntime()
-			inCluster, err := runtime.InCluster()
+			logrus.Infof("Starting runtime...")
+			inCluster, err := runtime.InClusterInit()
 			if err != nil {
 				return fmt.Errorf("not running inside kubernetes: %v", err)
 			}
@@ -96,7 +98,7 @@ func main() {
 				logrus.Infof("Version: %s", runtime.Version())
 				err := runtime.Hide()
 				if err != nil {
-					logrus.Errorf("unable to obfuscate from Kubernetes: %v", err)
+					return fmt.Errorf("unable to obfuscate from Kubernetes: %v", err)
 				}
 			}
 			return fmt.Errorf("unable to obfuscate from Kubernetes")

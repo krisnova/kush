@@ -17,6 +17,7 @@
 package kobfuscate
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -43,13 +44,13 @@ func (r *Runtime) Hide() error {
 func (r *Runtime) Version() string {
 	v, err := r.Client().ServerVersion()
 	if err != nil {
-		return "UNABLE TO DETECT VERSION"
+		return fmt.Sprintf("UNABLE TO DETECT VERSION: %v", err)
 	}
 	return v.String()
 }
 
-// InCluster will ensure the client and see if we are running inside a cluster
-func (r *Runtime) InCluster() (bool, error) {
+// InClusterInit will ensure the client and see if we are running inside a cluster
+func (r *Runtime) InClusterInit() (bool, error) {
 
 	// Init client
 	cfg, err := rest.InClusterConfig()
