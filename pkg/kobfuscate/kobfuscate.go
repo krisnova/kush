@@ -17,6 +17,9 @@
 package kobfuscate
 
 import (
+	"time"
+
+	"github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 )
@@ -30,6 +33,10 @@ func NewRuntime() *Runtime {
 }
 
 func (r *Runtime) Hide() error {
+	for true {
+		logrus.Infof("Hiding...")
+		time.Sleep(time.Second * 1)
+	}
 	return nil
 }
 

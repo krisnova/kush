@@ -17,7 +17,7 @@
 all: compile
 
 version     =  0.0.1
-target      =  kush
+target      =  kobfuscate
 org         =  kris-nova
 authorname  =  Kris Nóva
 authoremail =  kris@nivenly.com

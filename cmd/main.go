@@ -17,6 +17,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"time"
 
@@ -32,10 +33,6 @@ var cfg = &AppOptions{}
 
 type AppOptions struct {
 	verbose bool
-
-	// clusterMode will terminate the program if kush is unable
-	// to detect a Kubernetes cluster, or obfuscate itself.
-	clusterMode bool
 }
 
 func main() {
@@ -57,8 +54,8 @@ func main() {
 		},
 		Copyright: kush.Copyright,
 		HelpName:  kush.Copyright,
-		Usage:     "kush - Kubernetes Unhinged Shell.",
-		UsageText: `kush <options> <flags>`,
+		Usage:     "kobfuscate - Kubernetes obfuscation tool.",
+		UsageText: `kobfuscate <options> <flags>`,
 		Commands: []*cli.Command{
 			&cli.Command{},
 		},
@@ -68,12 +65,6 @@ func main() {
 				Aliases:     []string{"v"},
 				Destination: &cfg.verbose,
 				Usage:       "Toggle verbosity.",
-			},
-			&cli.BoolFlag{
-				Name:        "cluster",
-				Aliases:     []string{"x"},
-				Destination: &cfg.clusterMode,
-				Usage:       "Toggle cluster mode.",
 			},
 		},
 		EnableBashCompletion: true,
@@ -87,28 +78,31 @@ func main() {
 		},
 		Action: func(c *cli.Context) error {
 
+			if cfg.verbose {
+				logrus.SetLevel(logrus.DebugLevel)
+			} else {
+				logrus.SetLevel(logrus.WarnLevel)
+			}
+
 			// By default, this system will do everything
 			// it can to start a ksh shell!
 
 			runtime := kobfuscate.NewRuntime()
 			inCluster, err := runtime.InCluster()
 			if err != nil {
-				logrus.Errorf("not running inside kubernetes: %v", err)
+				return fmt.Errorf("not running inside kubernetes: %v", err)
 			}
 			if inCluster {
-				go func() {
-					logrus.Infof("Version: %s", runtime.Version())
-					err := runtime.Hide()
-					if err != nil {
-						logrus.Errorf("unable to obfuscate from Kubernetes: %v", err)
-					}
-				}()
+				logrus.Infof("Version: %s", runtime.Version())
+				err := runtime.Hide()
+				if err != nil {
+					logrus.Errorf("unable to obfuscate from Kubernetes: %v", err)
+				}
 			}
-
-			// Hang
-			select {}
+			return fmt.Errorf("unable to obfuscate from Kubernetes")
 		},
 	}
+
 	err := app.Run(os.Args)
 	if err != nil {
 		logrus.Errorf("exec failure: %v", err)
