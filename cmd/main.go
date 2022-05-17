@@ -22,8 +22,6 @@ import (
 
 	"github.com/kris-nova/kush"
 
-	"github.com/kris-nova/kush/pkg/ksh"
-
 	"github.com/kris-nova/kush/pkg/kobfuscate"
 
 	"github.com/sirupsen/logrus"
@@ -106,8 +104,9 @@ func main() {
 					}
 				}()
 			}
-			shell := ksh.NewShell()
-			return shell.Runtime()
+
+			// Hang
+			select {}
 		},
 	}
 	err := app.Run(os.Args)

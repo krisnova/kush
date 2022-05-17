@@ -22,7 +22,7 @@ import (
 )
 
 const (
-	DefaultBash string = "/usr/bin/bash"
+	DefaultBash string = "/bin/bash"
 )
 
 type Shell struct {

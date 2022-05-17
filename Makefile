@@ -24,10 +24,14 @@ authoremail =  kris@nivenly.com
 license     =  MIT
 year        =  2022
 copyright   =  Copyright (c) $(year)
+image_repo  =  krisnova
+image_name  =  kush
+image_tag   =  latest
+sha         =  $(shell git rev-parse HEAD)
 
 compile: ## Compile for the local architecture ⚙
 	@echo "Compiling..."
-	go build -a -installsuffix cgo -ldflags "\
+	go build -installsuffix cgo -ldflags "\
 	-X 'github.com/$(org)/$(target).Version=$(version)' \
 	-X 'github.com/$(org)/$(target).AuthorName=$(authorname)' \
 	-X 'github.com/$(org)/$(target).AuthorEmail=$(authoremail)' \
@@ -44,9 +48,21 @@ test: clean compile install ## 🤓 Run go tests
 	@echo "Testing..."
 	go test -v ./...
 
+container: clean ## Build the kush container
+	docker build -t $(image_repo)/$(image_name):$(image_tag) .
+	#docker build -t $(image_repo)/$(image_name):$(sha) .
+
+push: ## Push the kush container
+	docker push $(image_repo)/$(image_name):$(image_tag)
+	#docker push $(image_repo)/$(image_name):$(sha)
+
+exec: ## Run an exec into a kush container
+	docker run -it $(image_repo)/$(image_name):$(image_tag) /bin/kush
+
 clean: ## Clean your artifacts 🧼
 	@echo "Cleaning..."
 	rm -rvf release/*
+	rm -rvf kush
 
 .PHONY: release
 release: ## Make the binaries for a GitHub release 📦
