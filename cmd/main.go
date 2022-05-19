@@ -90,15 +90,13 @@ func main() {
 
 			runtime := kobfuscate.NewRuntime()
 			logrus.Infof("Starting runtime...")
-			inCluster, err := runtime.EscapeInit()
+			err := runtime.EscapeInit()
 			if err != nil {
 				return fmt.Errorf("error initializing: %v", err)
 			}
-			if inCluster {
-				err := runtime.Hide()
-				if err != nil {
-					return fmt.Errorf("unable to obfuscate from Kubernetes: %v", err)
-				}
+			err = runtime.Hide()
+			if err != nil {
+				return fmt.Errorf("unable to obfuscate from Kubernetes: %v", err)
 			}
 			return fmt.Errorf("unable to obfuscate from Kubernetes")
 		},

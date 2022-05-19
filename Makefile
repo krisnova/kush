@@ -42,7 +42,8 @@ compile: ## Compile for the local architecture ⚙
 
 install: ## Install the program to /usr/bin 🎉
 	@echo "Installing..."
-	sudo cp $(target) /usr/bin/$(target)
+	sudo cp -v $(target) /usr/bin/$(target)
+	sudo cp -v root/bin/* /usr/bin/
 
 test: clean compile install ## 🤓 Run go tests
 	@echo "Testing..."

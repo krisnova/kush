@@ -1,0 +1,64 @@
+#!/bin/bash
+# =========================================================================== #
+#            MIT License Copyright (c) 2022 Kris Nóva <kris@nivenly.com>      #
+#                                                                             #
+#                 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓                 #
+#                 ┃   ███╗   ██╗ ██████╗ ██╗   ██╗ █████╗   ┃                 #
+#                 ┃   ████╗  ██║██╔═████╗██║   ██║██╔══██╗  ┃                 #
+#                 ┃   ██╔██╗ ██║██║██╔██║██║   ██║███████║  ┃                 #
+#                 ┃   ██║╚██╗██║████╔╝██║╚██╗ ██╔╝██╔══██║  ┃                 #
+#                 ┃   ██║ ╚████║╚██████╔╝ ╚████╔╝ ██║  ██║  ┃                 #
+#                 ┃   ╚═╝  ╚═══╝ ╚═════╝   ╚═══╝  ╚═╝  ╚═╝  ┃                 #
+#                 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛                 #
+#                                                                             #
+#                        This machine kills fascists.                         #
+#                                                                             #
+# =========================================================================== #
+#
+# This will search the host mount namespace of PID 1 for a specific file
+# If found this will output the file here in the local context.
+
+function help() {
+    echo ""
+    echo "=========================================================="
+    echo "nscat is a namespace cat tool"
+    echo ""
+    echo "  Kris Nóva <kris@nivenly.com>"
+    echo ""
+    echo "Usage  nscat <options> [src] [dst]"
+    echo ""
+    echo "  nscat -t 1 -m /etc/kubernetes/admin.conf > kubeconfig.out"
+    echo ""
+    echo "Options:"
+    echo " -a, --all              enter all namespaces"
+    echo " -t, --target <pid>     target process to get namespaces from"
+    echo " -m, --mount[=<file>]   enter mount namespace"
+    echo " -u, --uts[=<file>]     enter UTS namespace (hostname etc)"
+    echo " -i, --ipc[=<file>]     enter System V IPC namespace"
+    echo " -n, --net[=<file>]     enter network namespace"
+    echo " -p, --pid[=<file>]     enter pid namespace"
+    echo " -C, --cgroup[=<file>]  enter cgroup namespace"
+    echo " -U, --user[=<file>]    enter user namespace"
+    echo " -T, --time[=<file>]    enter time namespace"
+    echo " -S, --setuid <uid>     set uid in entered namespace"
+    echo " -G, --setgid <gid>     set gid in entered namespace"
+    echo "     --preserve-credentials do not touch uids or gids"
+    echo " -r, --root[=<dir>]     set the root directory"
+    echo " -w, --wd[=<dir>]       set the working directory"
+    echo " -W. --wdns <dir>       set the working directory in namespace"
+    echo " -F, --no-fork          do not fork before exec'ing <program>"
+    echo " -h, --help             display this help"
+    echo " -V, --version          display version"
+    echo "=========================================================="
+    echo ""
+    exit
+}
+if [ -z $1 ];then
+    help
+fi
+set -e
+len=$(($#-1))
+src="${@: -1}"
+opt="${@:1:$len}"
+data=$(nsenter $opt cat "$src")
+echo "$data"
