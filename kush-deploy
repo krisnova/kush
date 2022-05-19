@@ -23,7 +23,7 @@ overrides="$(
 {
   "spec": {
     "hostPID": true,
-    "hostNetwork": true,
+    "hostNetwork": false,
     "containers": [
       {
         "securityContext": {
@@ -34,6 +34,16 @@ overrides="$(
         "stdin": true,
         "stdinOnce": true,
         "tty": true,
+        "env": [
+          {
+            "name": "PODNAME",
+            "valueFrom": {
+              "fieldRef": {
+                "fieldPath": "metadata.name"
+              }
+            }
+          }
+        ],
         "command": $CMD
       }
     ],
@@ -51,7 +61,6 @@ overrides="$(
 }
 EOT
 )"
-kubectl create ns $ns
 echo $overrides | jq
 pod="n0va-$(env LC_ALL=C tr -dc a-z0-9 </dev/urandom | head -c 6)"
 generator=""
@@ -59,4 +68,6 @@ m=$(kubectl version --client -o yaml | awk -F'[ :"]+' '$2 == "minor" {print $3+0
 if [ "$m" -lt 18 ]; then
   generator="--generator=run-pod/v1"
 fi
-kubectl run -n $ns --image "$IMG" --restart=Never --overrides="$overrides" -ti "$pod" $generator
+kubectl create ns $NS
+kubectl run -n $NS --image "$IMG" --restart=Never --overrides="$overrides" -ti "$pod" $generator
+kubectl delete po $pod -n $NS

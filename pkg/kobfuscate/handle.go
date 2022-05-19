@@ -16,8 +16,12 @@
 
 package kobfuscate
 
-import "net/http"
+import (
+	"net/http"
+
+	"github.com/sirupsen/logrus"
+)
 
 func HandleInject(w http.ResponseWriter, r *http.Request) {
-
+	logrus.Infof("Receiving request: %s %s", r.RemoteAddr, r.RequestURI)
 }

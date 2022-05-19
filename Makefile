@@ -28,6 +28,8 @@ image_repo  =  krisnova
 image_name  =  kush
 image_tag   =  latest
 sha         =  $(shell git rev-parse HEAD)
+cpuset      =  $(shell cat /proc/1/status | grep -i cpus_allowed_list | cut -d ":" -f 2 | sed 's/\t//g')
+
 
 compile: ## Compile for the local architecture ⚙
 	@echo "Compiling..."
@@ -50,16 +52,16 @@ test: clean compile install ## 🤓 Run go tests
 	go test -v ./...
 
 container: clean ## Build the kush container
-	docker build -t $(image_repo)/$(image_name):$(image_tag) .
-	#docker build -t $(image_repo)/$(image_name):$(sha) .
+	docker build --cpuset-cpus=$(cpuset) -t $(image_repo)/$(image_name):$(image_tag) .
+	#docker build --cpuset-cpus=$(cpuset) -t $(image_repo)/$(image_name):$(sha) .
 
 push: ## Push the kush container
 	docker push $(image_repo)/$(image_name):$(image_tag)
 	#docker push $(image_repo)/$(image_name):$(sha)
 
 container-base: clean ## Build the base container
-	docker build -t $(image_repo)/$(image_name)base:$(image_tag) image/
-	#docker build -t $(image_repo)/$(image_name)base:$(sha) .
+	docker build --cpuset-cpus=$(cpuset) -t $(image_repo)/$(image_name)base:$(image_tag) image/
+	#docker build --cpuset-cpus=$(cpuset) -t $(image_repo)/$(image_name)base:$(sha) .
 
 push-base: ## Push the kush container
 	docker push $(image_repo)/$(image_name)base:$(image_tag)
