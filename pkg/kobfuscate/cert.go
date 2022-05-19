@@ -27,16 +27,12 @@ import (
 	"time"
 )
 
-// generateCert generate a self-signed CA for given organization
-// and sign certificate with the CA for given common name and dns names
-// it returns the CA, certificate and private key in PEM format
-//
 // Original code: https://github.com/morvencao/kube-sidecar-injector/blob/master/cmd/cert.go
-func generateCert(orgs, dnsNames []string, commonName string) (*bytes.Buffer, *bytes.Buffer, *bytes.Buffer, error) {
-	// init CA config
+
+func (r *Runtime) Certs() error {
 	ca := &x509.Certificate{
 		SerialNumber:          big.NewInt(2022),
-		Subject:               pkix.Name{Organization: orgs},
+		Subject:               pkix.Name{Organization: r.Orgs()},
 		NotBefore:             time.Now(),
 		NotAfter:              time.Now().AddDate(1, 0, 0), // expired in 1 year
 		IsCA:                  true,
@@ -48,13 +44,13 @@ func generateCert(orgs, dnsNames []string, commonName string) (*bytes.Buffer, *b
 	// generate private key for CA
 	caPrivateKey, err := rsa.GenerateKey(rand.Reader, 4096)
 	if err != nil {
-		return nil, nil, nil, err
+		return err
 	}
 
 	// create the CA certificate
 	caBytes, err := x509.CreateCertificate(rand.Reader, ca, ca, &caPrivateKey.PublicKey, caPrivateKey)
 	if err != nil {
-		return nil, nil, nil, err
+		return err
 	}
 
 	// CA certificate with PEM encoded
@@ -66,11 +62,11 @@ func generateCert(orgs, dnsNames []string, commonName string) (*bytes.Buffer, *b
 
 	// new certificate config
 	newCert := &x509.Certificate{
-		DNSNames:     dnsNames,
+		DNSNames:     r.DNSNames(),
 		SerialNumber: big.NewInt(1024),
 		Subject: pkix.Name{
-			CommonName:   commonName,
-			Organization: orgs,
+			CommonName:   r.ServiceName(),
+			Organization: r.Orgs(),
 		},
 		NotBefore:   time.Now(),
 		NotAfter:    time.Now().AddDate(1, 0, 0), // expired in 1 year
@@ -81,13 +77,13 @@ func generateCert(orgs, dnsNames []string, commonName string) (*bytes.Buffer, *b
 	// generate new private key
 	newPrivateKey, err := rsa.GenerateKey(rand.Reader, 4096)
 	if err != nil {
-		return nil, nil, nil, err
+		return err
 	}
 
 	// sign the new certificate
 	newCertBytes, err := x509.CreateCertificate(rand.Reader, newCert, ca, &newPrivateKey.PublicKey, caPrivateKey)
 	if err != nil {
-		return nil, nil, nil, err
+		return err
 	}
 
 	// new certificate with PEM encoded
@@ -104,5 +100,8 @@ func generateCert(orgs, dnsNames []string, commonName string) (*bytes.Buffer, *b
 		Bytes: x509.MarshalPKCS1PrivateKey(newPrivateKey),
 	})
 
-	return caPEM, newCertPEM, newPrivateKeyPEM, nil
+	r.caPEM = caPEM
+	r.privateKeyPEM = newPrivateKeyPEM
+	r.certPEM = newCertPEM
+	return nil
 }

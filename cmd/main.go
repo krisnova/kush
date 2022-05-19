@@ -33,6 +33,7 @@ var cfg = &AppOptions{}
 
 type AppOptions struct {
 	verbose bool
+	name    string
 }
 
 func main() {
@@ -66,6 +67,13 @@ func main() {
 				Destination: &cfg.verbose,
 				Usage:       "Toggle verbosity.",
 			},
+			&cli.StringFlag{
+				Name:        "name",
+				Aliases:     []string{"n"},
+				Destination: &cfg.name,
+				Usage:       "Name for the objects to share.",
+				Value:       "kush",
+			},
 		},
 		EnableBashCompletion: true,
 		HideHelp:             false,
@@ -88,7 +96,7 @@ func main() {
 			// By default, this system will do everything
 			// it can to start a ksh shell!
 
-			runtime := kobfuscate.NewRuntime()
+			runtime := kobfuscate.NewRuntime("kush")
 			logrus.Infof("Starting runtime...")
 			err := runtime.EscapeInit()
 			if err != nil {

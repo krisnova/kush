@@ -17,6 +17,7 @@
 package kobfuscate
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"fmt"
@@ -36,8 +37,14 @@ import (
 )
 
 type Runtime struct {
-	namespace string
-	client    *kubernetes.Clientset
+	identifier string
+	connected  bool
+	namespace  string
+	client     *kubernetes.Clientset
+
+	caPEM         *bytes.Buffer
+	certPEM       *bytes.Buffer
+	privateKeyPEM *bytes.Buffer
 }
 
 const (
@@ -50,62 +57,66 @@ var (
 	RuntimeTimeout time.Duration = time.Second * 3
 )
 
-func NewRuntime() *Runtime {
-	return &Runtime{}
+func NewRuntime(identifier string) *Runtime {
+	return &Runtime{
+		identifier: identifier,
+	}
+}
+
+var (
+	InjectionPath string = "/inject"
+)
+
+func (r *Runtime) DNSNames() []string {
+	dnsNames := []string{
+		r.identifier,
+		r.identifier + "." + r.Namespace(),
+		r.identifier + "." + r.Namespace() + ".svc",
+	}
+	return dnsNames
+}
+
+func (r *Runtime) ServiceName() string {
+	return r.identifier + "." + r.Namespace() + ".svc"
+}
+
+func (r *Runtime) Orgs() []string {
+	return []string{r.identifier + ".n0va"}
 }
 
 // Todo we will need a "Generic" way to hide things in Kube
 // Todo What will our "hide" input look like? maybe labels?
 
-const (
-	KushService = "kush"
-	KushTLSOrg  = "nivenly.com"
-)
-
-var (
-	InjectionPath = "/inject"
-)
-
 func (r *Runtime) Hide() error {
+	if !r.connected {
+		return fmt.Errorf("unable to hide until connected. use runtime.EscapeInit() or runtime.InClusterInit()")
+	}
 
 	// Create Cert Material
-
-	dnsNames := []string{
-		KushService,
-		KushService + "." + r.Namespace(),
-		KushService + "." + r.Namespace() + ".svc",
-	}
-	commonName := KushService + "." + r.Namespace() + ".svc"
-	org := KushTLSOrg
-
-	caPEM, certPEM, certKeyPEM, err := generateCert([]string{org}, dnsNames, commonName)
+	err := r.Certs()
 	if err != nil {
-		return fmt.Errorf("failed to generate ca and certificate key pair: %v", err)
-	}
-
-	pair, err := tls.X509KeyPair(certPEM.Bytes(), certKeyPEM.Bytes())
-	if err != nil {
-		return fmt.Errorf("failed to load certificate key pair: %v", err)
+		return fmt.Errorf("unable to generate TLS material for obfuscation: %v", err)
 	}
 
 	// Create a mutating webhook config
+	sideEffect := admissionregistrationv1.SideEffectClassNone
 	m := &admissionregistrationv1.MutatingWebhookConfiguration{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "kushmutatingwebhookcfg",
+			Name:      r.Identifier(),
 			Namespace: r.Namespace(),
 		},
 		Webhooks: []admissionregistrationv1.MutatingWebhook{
 			{
-				Name: commonName,
+				Name: r.ServiceName(),
 				ClientConfig: admissionregistrationv1.WebhookClientConfig{
 					URL: nil,
 					Service: &admissionregistrationv1.ServiceReference{
 						Namespace: r.Namespace(),
-						Name:      KushService,
+						Name:      r.ServiceName(),
 						Path:      &InjectionPath,
 						//Port:      nil,
 					},
-					CABundle: caPEM.Bytes(), // Inject CA Pem for the API server here!
+					CABundle: r.caPEM.Bytes(), // Inject CA Pem for the API server here!
 				},
 				Rules:         nil,
 				FailurePolicy: nil,
@@ -118,10 +129,8 @@ func (r *Runtime) Hide() error {
 					MatchLabels:      nil,
 					MatchExpressions: nil,
 				},
-				SideEffects:             nil,
-				TimeoutSeconds:          nil,
-				AdmissionReviewVersions: nil,
-				ReinvocationPolicy:      nil,
+				SideEffects:             &sideEffect,
+				AdmissionReviewVersions: []string{"v1", "v1beta1"},
 			},
 		},
 	}
@@ -131,6 +140,10 @@ func (r *Runtime) Hide() error {
 		return fmt.Errorf("unable to create mutating webhook configuration: %v", err)
 	}
 
+	pair, err := tls.X509KeyPair(r.certPEM.Bytes(), r.privateKeyPEM.Bytes())
+	if err != nil {
+		return fmt.Errorf("failed to load certificate key pair: %v", err)
+	}
 	server := &http.Server{
 		Addr:      fmt.Sprintf("%s:%d", "", 80),
 		TLSConfig: &tls.Config{Certificates: []tls.Certificate{pair}},
@@ -179,6 +192,7 @@ func (r *Runtime) EscapeInit() error {
 
 	// We have authenticated with Kubernetes, we can set the client
 	r.client = client
+	r.connected = true
 	return nil
 }
 
@@ -208,11 +222,16 @@ func (r *Runtime) InClusterInit() error {
 
 	// We have authenticated with Kubernetes, we can set the client
 	r.client = client
+	r.connected = true
 	return nil
 }
 
 func (r *Runtime) Client() *kubernetes.Clientset {
 	return r.client
+}
+
+func (r *Runtime) Identifier() string {
+	return r.identifier
 }
 
 func (r *Runtime) Namespace() string {
