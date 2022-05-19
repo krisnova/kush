@@ -258,7 +258,6 @@ func (r *Runtime) Open() error {
 		r.self = pod
 		logrus.Infof("Found self: %s", pod.Name)
 	}
-	logrus.Warnf("Unable to find self pod! Possibly running in local mode!")
 	return nil
 }
 

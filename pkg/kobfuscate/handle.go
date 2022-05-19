@@ -81,6 +81,13 @@ func HandleInject(w http.ResponseWriter, r *http.Request) {
 		aResponse = mutate(aReview)
 	}
 
+	aReview = &admissionv1.AdmissionReview{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "admission.k8s.io/v1",
+			Kind:       "AdmissionReview",
+		},
+	}
+
 	// Prepare the response
 	if aResponse != nil {
 		aReview.Response = aResponse
@@ -108,5 +115,8 @@ func HandleInject(w http.ResponseWriter, r *http.Request) {
 
 func mutate(in *admissionv1.AdmissionReview) *admissionv1.AdmissionResponse {
 	var out *admissionv1.AdmissionResponse
+
+	// TODO we need to mutate our requests here!
+
 	return out
 }
