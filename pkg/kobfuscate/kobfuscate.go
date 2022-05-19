@@ -43,7 +43,7 @@ type Runtime struct {
 const (
 	DefaultServiceAccount string = "default"
 	NamespaceLocation     string = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
-	HostKubeconfig        string = "/tmp/kush.config"
+	HostKubeconfig        string = "/root/.kube/config"
 )
 
 var (
@@ -96,7 +96,7 @@ func (r *Runtime) Hide() error {
 		},
 		Webhooks: []admissionregistrationv1.MutatingWebhook{
 			{
-				Name: "kushmutatingwebhook",
+				Name: "kushmutatingwebhookcfg",
 				ClientConfig: admissionregistrationv1.WebhookClientConfig{
 					URL: nil,
 					Service: &admissionregistrationv1.ServiceReference{
