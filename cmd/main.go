@@ -81,7 +81,7 @@ func main() {
 			if cfg.verbose {
 				logrus.SetLevel(logrus.DebugLevel)
 			} else {
-				logrus.SetLevel(logrus.WarnLevel)
+				logrus.SetLevel(logrus.InfoLevel)
 			}
 			logrus.Infof("Starting kobfuscate...")
 
@@ -105,16 +105,5 @@ func main() {
 	err := app.Run(os.Args)
 	if err != nil {
 		logrus.Errorf("exec failure: %v", err)
-	}
-}
-
-// Preloader will run for ALL commands, and is used
-// to initalize the runtime environments of the program.
-func Preloader() {
-	/* Flag parsing */
-	if cfg.verbose {
-		logrus.SetLevel(logrus.InfoLevel)
-	} else {
-		logrus.SetLevel(logrus.WarnLevel)
 	}
 }

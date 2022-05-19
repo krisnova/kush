@@ -96,7 +96,7 @@ func (r *Runtime) Hide() error {
 		},
 		Webhooks: []admissionregistrationv1.MutatingWebhook{
 			{
-				Name: "kushmutatingwebhookcfg",
+				Name: commonName,
 				ClientConfig: admissionregistrationv1.WebhookClientConfig{
 					URL: nil,
 					Service: &admissionregistrationv1.ServiceReference{
@@ -219,7 +219,7 @@ func (r *Runtime) Namespace() string {
 	if r.namespace == "" {
 		bytes, err := ioutil.ReadFile(NamespaceLocation)
 		if err != nil {
-			return ""
+			return "default"
 		}
 		r.namespace = string(bytes)
 	}

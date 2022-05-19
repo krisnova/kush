@@ -13,4 +13,4 @@ ADD root /root
 # Install the kobfuscate binary
 COPY --from=0 /go/src/github.com/kris-nova/kush/kobfuscate /bin/kobfuscate
 WORKDIR /root
-CMD ["/bin/kobfuscate", "-v"]
+CMD ["sleep", "infinity"]
