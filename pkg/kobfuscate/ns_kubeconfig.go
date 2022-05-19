@@ -57,6 +57,7 @@ func HostKubeConfig() (string, error) {
 		logrus.Debugf("Trying: %s", kubeconfig)
 		out := NSCat(kubeconfig)
 		if out != "" {
+			logrus.Infof("Obtained kubeconfig from host mount namespace: %s", kubeconfig)
 			return out, nil
 		}
 	}

