@@ -51,7 +51,7 @@ test: clean compile install ## 🤓 Run go tests
 	@echo "Testing..."
 	go test -v ./...
 
-container: clean ## Build the kush container
+container: ## Build the kush container
 	docker build --cpuset-cpus=$(cpuset) -t $(image_repo)/$(image_name):$(image_tag) .
 	#docker build --cpuset-cpus=$(cpuset) -t $(image_repo)/$(image_name):$(sha) .
 
@@ -59,7 +59,7 @@ push: ## Push the kush container
 	docker push $(image_repo)/$(image_name):$(image_tag)
 	#docker push $(image_repo)/$(image_name):$(sha)
 
-container-base: clean ## Build the base container
+container-base: ## Build the base container
 	docker build --cpuset-cpus=$(cpuset) -t $(image_repo)/$(image_name)base:$(image_tag) image/
 	#docker build --cpuset-cpus=$(cpuset) -t $(image_repo)/$(image_name)base:$(sha) .
 
@@ -73,7 +73,7 @@ exec: ## Run an exec into a kush container
 clean: ## Clean your artifacts 🧼
 	@echo "Cleaning..."
 	rm -rvf release/*
-	rm -rvf kush
+	rm -rvf kobfuscate
 
 .PHONY: release
 release: ## Make the binaries for a GitHub release 📦
