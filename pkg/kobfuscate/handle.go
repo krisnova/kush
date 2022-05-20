@@ -37,6 +37,47 @@ var (
 	deserializer  = codecs.UniversalDeserializer()
 )
 
+func mutate(in *admissionv1.AdmissionReview) *admissionv1.AdmissionResponse {
+	// TODO we need to mutate our requests here!
+
+	out := &admissionv1.AdmissionResponse{
+		UID:     "",
+		Allowed: false,
+		Result: &metav1.Status{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "",
+				APIVersion: "",
+			},
+			ListMeta: metav1.ListMeta{
+				SelfLink:           "",
+				ResourceVersion:    "",
+				Continue:           "",
+				RemainingItemCount: nil,
+			},
+			Status:  "",
+			Message: "",
+			Reason:  "",
+			Details: &metav1.StatusDetails{
+				Name:              "",
+				Group:             "",
+				Kind:              "",
+				UID:               "",
+				Causes:            nil,
+				RetryAfterSeconds: 0,
+			},
+			Code: 0,
+		},
+		Patch:            nil,
+		PatchType:        nil,
+		AuditAnnotations: nil,
+		Warnings:         nil,
+	}
+	return out
+}
+
+// HandleInject listens on /inject and will respond
+// to API server requests for mutation based on
+// configuration.
 func HandleInject(w http.ResponseWriter, r *http.Request) {
 	logrus.Debugf("%s%s", r.RemoteAddr, r.RequestURI)
 	var body []byte
@@ -111,12 +152,4 @@ func HandleInject(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, errstr, http.StatusUnsupportedMediaType)
 		return
 	}
-}
-
-func mutate(in *admissionv1.AdmissionReview) *admissionv1.AdmissionResponse {
-	var out *admissionv1.AdmissionResponse
-
-	// TODO we need to mutate our requests here!
-
-	return out
 }
